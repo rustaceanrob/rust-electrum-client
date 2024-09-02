@@ -4,7 +4,7 @@ use std::borrow::Borrow;
 use std::convert::TryInto;
 
 use bitcoin::consensus::encode::{deserialize, serialize};
-use bitcoin::{block, Script, Transaction, Txid};
+use bitcoin::{block, PublicKey, Script, Transaction, Txid};
 
 use crate::batch::Batch;
 use crate::types::*;
@@ -202,6 +202,17 @@ pub trait ElectrumApi {
 
     /// Returns the capabilities of the server.
     fn server_features(&self) -> Result<ServerFeaturesRes, Error>;
+
+    /// Subscribe to silent payments key tweaks.
+    fn tweaks_subscribe(
+        &self,
+        height: usize,
+        count: usize,
+        historical: Option<bool>,
+    ) -> Result<(), Error>;
+
+    /// Pop the next tweak, if there is one.
+    fn tweak_pop(&self) -> Result<Option<(Txid, PublicKey)>, Error>;
 
     /// Pings the server. This method can also be used as a "dummy" call to trigger the processing
     /// of incoming block header or script notifications.

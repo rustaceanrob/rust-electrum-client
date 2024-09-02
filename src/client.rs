@@ -342,6 +342,22 @@ impl ElectrumApi for Client {
     fn calls_made(&self) -> Result<usize, Error> {
         impl_inner_call!(self, calls_made)
     }
+
+    #[inline]
+    fn tweaks_subscribe(
+        &self,
+        height: usize,
+        count: usize,
+        historical: Option<bool>,
+    ) -> Result<(), Error> {
+        impl_inner_call!(self, tweaks_subscribe, height, count, historical)
+    }
+
+
+    #[inline]
+    fn tweak_pop(&self) -> Result<Option<(Txid, bitcoin::PublicKey)>, Error> {
+        impl_inner_call!(self, tweak_pop)
+    }
 }
 
 #[cfg(test)]

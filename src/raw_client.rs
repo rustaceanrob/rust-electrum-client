@@ -17,7 +17,7 @@ use log::{debug, error, info, trace, warn};
 
 use bitcoin::consensus::encode::deserialize;
 use bitcoin::hex::{DisplayHex, FromHex};
-use bitcoin::{Script, Txid};
+use bitcoin::{PublicKey, Script, Txid};
 
 #[cfg(feature = "use-openssl")]
 use openssl::ssl::{SslConnector, SslMethod, SslStream, SslVerifyMode};
@@ -142,6 +142,8 @@ where
     headers: Mutex<VecDeque<RawHeaderNotification>>,
     script_notifications: Mutex<HashMap<ScriptHash, VecDeque<ScriptStatus>>>,
 
+    tweak_notifications: Mutex<VecDeque<(Txid, PublicKey)>>,
+
     #[cfg(feature = "debug-calls")]
     calls: AtomicUsize,
 }
@@ -162,6 +164,8 @@ where
 
             headers: Mutex::new(VecDeque::new()),
             script_notifications: Mutex::new(HashMap::new()),
+
+            tweak_notifications: Mutex::new(VecDeque::new()),
 
             #[cfg(feature = "debug-calls")]
             calls: AtomicUsize::new(0),
@@ -398,8 +402,6 @@ impl RawClient<ElectrumSslStream> {
         validate_domain: bool,
         tcp_stream: TcpStream,
     ) -> Result<Self, Error> {
-        use std::convert::TryFrom;
-
         let builder = ClientConfig::builder();
 
         let config = if validate_domain {
@@ -708,6 +710,25 @@ impl<S: Read + Write> RawClient<S> {
                     .ok_or(Error::NotSubscribed(unserialized.scripthash))?;
 
                 queue.push_back(unserialized.status);
+            }
+            "blockchain.tweaks.subscribe" => {
+                let tweak = serde_json::from_value::<Vec<TweakNotification>>(result);
+                let mut queue = self.tweak_notifications.lock()?;
+                if let Ok(tweaks) = tweak {
+                    for tweak in tweaks {
+                        let tweak_vals = tweak
+                            .root
+                            .values()
+                            .into_iter();
+                        for map in tweak_vals.into_iter() {
+                            for (txid, inner_data) in &map.data {
+                                let txid = txid.parse::<Txid>().expect("valid hash");
+                                let pk = inner_data.tweak.parse::<PublicKey>().expect("valid public key");
+                                queue.push_back((txid, pk));
+                            }
+                        }
+                    }
+                }
             }
             _ => info!("received unknown notification for method `{}`", method),
         }
@@ -1113,6 +1134,29 @@ impl<T: Read + Write> ElectrumApi for RawClient<T> {
         self.call(req)?;
 
         Ok(())
+    }
+
+    fn tweaks_subscribe(
+        &self,
+        height: usize,
+        count: usize,
+        _historical: Option<bool>,
+    ) -> Result<(), Error> {
+        let height = Param::Usize(height);
+        let count = Param::Usize(count);
+        let historical = Param::Bool(false);
+        let req = Request::new_id(
+            self.last_id.fetch_add(1, Ordering::SeqCst),
+            "blockchain.tweaks.subscribe",
+            vec![height, count, historical],
+        );
+        self.call(req)?;
+        Ok(())
+    }
+
+
+    fn tweak_pop(&self) -> Result<Option<(Txid, PublicKey)>, Error> {
+        Ok(self.tweak_notifications.lock()?.pop_front())
     }
 
     #[cfg(feature = "debug-calls")]

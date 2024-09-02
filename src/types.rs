@@ -2,6 +2,7 @@
 //!
 //! This module contains definitions of all the complex data structures that are returned by calls
 
+use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::fmt::{self, Display, Formatter};
 use std::ops::Deref;
@@ -280,6 +281,28 @@ pub struct ScriptNotification {
     pub status: ScriptStatus,
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+pub struct OutputPubkeys {
+    pub keys: HashMap<String, (String, u64)>, // HashMap to store key-value pairs from "output_pubkeys"
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct InnerData {
+    pub output_pubkeys: HashMap<String, (String, u64)>,
+    pub tweak: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ResponseData {
+    #[serde(flatten)]
+    pub data: HashMap<String, InnerData>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct TweakNotification {
+    #[serde(flatten)]
+    pub root: HashMap<String, ResponseData>,
+}
 /// Errors
 #[derive(Debug)]
 pub enum Error {
